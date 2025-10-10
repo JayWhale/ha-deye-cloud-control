@@ -64,15 +64,16 @@ class DeyeCloudClient:
         if data is None:
             data = {}
 
+        headers = {
+            "Content-Type": "application/json",
+        }
+
         # Add access token if required and available
         if require_auth:
             if not self._access_token or time.time() >= self._token_expiry:
                 await self.obtain_token()
-            data["access_token"] = self._access_token
-
-        headers = {
-            "Content-Type": "application/json",
-        }
+            # Add token to headers, not to data
+            headers["Authorization"] = f"Bearer {self._access_token}"
 
         try:
             async with async_timeout.timeout(API_TIMEOUT):
@@ -95,7 +96,7 @@ class DeyeCloudClient:
             if code not in [0, 1000000, "0", "1000000"]:
                 error_msg = result.get("msg", "Unknown error")
                 _LOGGER.error("API error: %s (code: %s)", error_msg, code)
-                if code in [1001, 1002, 1003, "1001", "1002", "1003"]:  # Auth errors
+                if code in [1001, 1002, 1003, "1001", "1002", "1003", 2101017, "2101017"]:  # Auth errors
                     raise DeyeCloudAuthError(error_msg)
                 raise DeyeCloudApiError(error_msg)
 
