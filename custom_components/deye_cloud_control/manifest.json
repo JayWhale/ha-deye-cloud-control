@@ -1,0 +1,11 @@
+{
+  "domain": "deye_cloud_control",
+  "name": "Deye Cloud Control",
+  "codeowners": ["@JayWhale"],
+  "config_flow": true,
+  "documentation": "https://github.com/yourusername/ha-deye-cloud-control",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "requirements": ["aiohttp>=3.8.0"],
+  "version": "1.0.0"
+}
