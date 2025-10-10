@@ -1,0 +1,41 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Deye Cloud Control",
+        "description": "Enter your Deye Cloud credentials. You can obtain your App ID and App Secret from the [Deye Cloud Developer Portal](https://developer.deyecloud.com/app).",
+        "data": {
+          "region": "Region",
+          "app_id": "App ID",
+          "app_secret": "App Secret",
+          "email": "Email (Deye Cloud account)",
+          "password": "Password (Deye Cloud account)",
+          "scan_interval": "Update interval (seconds)"
+        },
+        "data_description": {
+          "region": "Select your datacenter region",
+          "email": "Your Deye Cloud login email",
+          "password": "Your Deye Cloud login password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Deye Cloud API",
+      "invalid_auth": "Invalid credentials. Check your App ID, App Secret, email, and password",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This Deye Cloud Control account is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Deye Cloud Control Options",
+        "data": {
+          "scan_interval": "Update interval (seconds)"
+        }
+      }
+    }
+  }
+}
