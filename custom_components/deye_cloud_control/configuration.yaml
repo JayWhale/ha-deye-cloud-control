@@ -1,0 +1,4 @@
+logger:
+  default: info
+  logs:
+    custom_components.deye_cloud_control: debug
