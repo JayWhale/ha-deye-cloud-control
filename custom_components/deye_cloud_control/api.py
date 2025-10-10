@@ -112,7 +112,7 @@ class DeyeCloudClient:
         """Obtain access token."""
         _LOGGER.debug("Obtaining new access token")
         
-        # Token endpoint requires appId as query parameter
+        # Token endpoint: GET with appId as query parameter, credentials in POST body
         url = f"{self.base_url}/account/token?appId={self.app_id}"
         
         request_data = {
@@ -125,16 +125,19 @@ class DeyeCloudClient:
         
         try:
             async with async_timeout.timeout(API_TIMEOUT):
+                # Use POST (not GET) but with appId in URL
                 async with session.post(
                     url,
                     json=request_data,
                     headers={"Content-Type": "application/json"},
                 ) as response:
+                    _LOGGER.debug("Token request status: %s", response.status)
                     response.raise_for_status()
                     result = await response.json()
 
-            _LOGGER.debug("Token response: code=%s (type=%s), msg=%s", 
-                         result.get("code"), type(result.get("code")), result.get("msg"))
+            _LOGGER.debug("Token response: code=%s (type=%s), msg=%s, data=%s", 
+                         result.get("code"), type(result.get("code")), 
+                         result.get("msg"), result.get("data"))
 
             # Check for success (Deye uses both 0 and 1000000 as success codes)
             # Handle both string and integer codes
@@ -149,6 +152,7 @@ class DeyeCloudClient:
             
             if not self._access_token:
                 _LOGGER.error("No access token in response data: %s", data)
+                _LOGGER.error("Full response: %s", result)
                 raise DeyeCloudAuthError("Failed to obtain access token - no token in response")
             
             # Token expires after 60 days according to docs
