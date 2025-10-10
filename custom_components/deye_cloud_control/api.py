@@ -1,299 +1,159 @@
-"""Deye Cloud API Client."""
-import asyncio
+"""Config flow for Deye Cloud Control integration."""
 import logging
-import hashlib
-import time
-from typing import Any, Dict, List, Optional
-import aiohttp
-import async_timeout
+from typing import Any, Dict, Optional
+
+import voluptuous as vol
+
+from homeassistant import config_entries
+from homeassistant.const import CONF_SCAN_INTERVAL
+from homeassistant.core import callback
+from homeassistant.helpers import selector
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import homeassistant.helpers.config_validation as cv
+
+from .api import DeyeCloudAuthError, DeyeCloudClient
+from .const import (
+    CONF_APP_ID,
+    CONF_APP_SECRET,
+    CONF_EMAIL,
+    CONF_PASSWORD,
+    CONF_REGION,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    REGIONS,
+    REGION_EU,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-API_TIMEOUT = 30
 
+class DeyeCloudConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Deye Cloud."""
 
-class DeyeCloudApiError(Exception):
-    """Base exception for Deye Cloud API errors."""
+    VERSION = 1
 
-
-class DeyeCloudAuthError(DeyeCloudApiError):
-    """Authentication error."""
-
-
-class DeyeCloudClient:
-    """Client to interact with Deye Cloud API."""
-
-    def __init__(
-        self,
-        base_url: str,
-        app_id: str,
-        app_secret: str,
-        email: str,
-        password: str,
-        session: Optional[aiohttp.ClientSession] = None,
-    ) -> None:
-        """Initialize the client."""
-        self.base_url = base_url
-        self.app_id = app_id
-        self.app_secret = app_secret
-        self.email = email
-        self.password_hash = hashlib.sha256(password.encode()).hexdigest().lower()
-        self._session = session
-        self._close_session = False
-        self._access_token: Optional[str] = None
-        self._token_expiry: int = 0
-
-    async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create aiohttp session."""
-        if self._session is None:
-            self._session = aiohttp.ClientSession()
-            self._close_session = True
-        return self._session
-
-    async def _request(
-        self,
-        method: str,
-        endpoint: str,
-        data: Optional[Dict[str, Any]] = None,
-        require_auth: bool = True,
+    async def async_step_user(
+        self, user_input: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Make API request."""
-        session = await self._get_session()
-        url = f"{self.base_url}{endpoint}"
+        """Handle the initial step."""
+        errors = {}
 
-        if data is None:
-            data = {}
+        if user_input is not None:
+            try:
+                region = user_input[CONF_REGION]
+                base_url = REGIONS[region]["base_url"]
+                
+                session = async_get_clientsession(self.hass)
+                
+                # Test the credentials
+                client = DeyeCloudClient(
+                    base_url=base_url,
+                    app_id=user_input[CONF_APP_ID],
+                    app_secret=user_input[CONF_APP_SECRET],
+                    email=user_input[CONF_EMAIL],
+                    password=user_input[CONF_PASSWORD],
+                    session=session,
+                )
+                
+                if await client.test_connection():
+                    await client.close()
+                    
+                    # Create a unique ID based on email
+                    await self.async_set_unique_id(user_input[CONF_EMAIL])
+                    self._abort_if_unique_id_configured()
 
-        headers = {
-            "Content-Type": "application/json",
-        }
-
-        # Add access token if required and available
-        if require_auth:
-            if not self._access_token or time.time() >= self._token_expiry:
-                await self.obtain_token()
-            # Add token to headers, not to data
-            headers["Authorization"] = f"Bearer {self._access_token}"
-
-        try:
-            async with async_timeout.timeout(API_TIMEOUT):
-                if method.upper() == "GET":
-                    async with session.get(
-                        url, params=data, headers=headers
-                    ) as response:
-                        response.raise_for_status()
-                        result = await response.json()
+                    return self.async_create_entry(
+                        title=f"Deye Cloud Control ({user_input[CONF_EMAIL]})",
+                        data={
+                            CONF_REGION: region,
+                            CONF_APP_ID: user_input[CONF_APP_ID],
+                            CONF_APP_SECRET: user_input[CONF_APP_SECRET],
+                            CONF_EMAIL: user_input[CONF_EMAIL],
+                            CONF_PASSWORD: user_input[CONF_PASSWORD],
+                        },
+                        options={
+                            CONF_SCAN_INTERVAL: user_input.get(
+                                CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+                            ),
+                        },
+                    )
                 else:
-                    async with session.post(
-                        url, json=data, headers=headers
-                    ) as response:
-                        response.raise_for_status()
-                        result = await response.json()
+                    errors["base"] = "cannot_connect"
+                    
+                await client.close()
 
-            # Check API response code (0 and 1000000 are success codes)
-            # Handle both string and integer codes
-            code = result.get("code")
-            if code not in [0, 1000000, "0", "1000000"]:
-                error_msg = result.get("msg", "Unknown error")
-                _LOGGER.error("API error: %s (code: %s)", error_msg, code)
-                if code in [1001, 1002, 1003, "1001", "1002", "1003", 2101017, "2101017"]:  # Auth errors
-                    raise DeyeCloudAuthError(error_msg)
-                raise DeyeCloudApiError(error_msg)
+            except DeyeCloudAuthError:
+                errors["base"] = "invalid_auth"
+            except Exception as err:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception: %s", err)
+                errors["base"] = "unknown"
 
-            return result.get("data", {})
+        # Create region options for dropdown
+        region_options = [
+            {"label": info["name"], "value": region_key}
+            for region_key, info in REGIONS.items()
+        ]
 
-        except aiohttp.ClientError as err:
-            _LOGGER.error("Connection error: %s", err)
-            raise DeyeCloudApiError(f"Connection error: {err}") from err
-        except asyncio.TimeoutError as err:
-            _LOGGER.error("Request timeout")
-            raise DeyeCloudApiError("Request timeout") from err
+        data_schema = vol.Schema(
+            {
+                vol.Required(CONF_REGION, default=REGION_EU): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=region_options,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required(CONF_APP_ID): str,
+                vol.Required(CONF_APP_SECRET): str,
+                vol.Required(CONF_EMAIL): str,
+                vol.Required(CONF_PASSWORD): str,
+                vol.Optional(
+                    CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL
+                ): vol.All(vol.Coerce(int), vol.Range(min=30, max=3600)),
+            }
+        )
 
-    async def obtain_token(self) -> str:
-        """Obtain access token."""
-        _LOGGER.debug("Obtaining new access token")
-        
-        # Token endpoint: GET with appId as query parameter, credentials in POST body
-        url = f"{self.base_url}/account/token?appId={self.app_id}"
-        
-        request_data = {
-            "appSecret": self.app_secret,
-            "email": self.email,
-            "password": self.password_hash,
-        }
+        return self.async_show_form(
+            step_id="user",
+            data_schema=data_schema,
+            errors=errors,
+            description_placeholders={
+                "info": "Get your App ID and App Secret from https://developer.deyecloud.com/app",
+            },
+        )
 
-        session = await self._get_session()
-        
-        try:
-            async with async_timeout.timeout(API_TIMEOUT):
-                # Use POST (not GET) but with appId in URL
-                async with session.post(
-                    url,
-                    json=request_data,
-                    headers={"Content-Type": "application/json"},
-                ) as response:
-                    _LOGGER.debug("Token request status: %s", response.status)
-                    response.raise_for_status()
-                    result = await response.json()
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> "DeyeCloudOptionsFlow":
+        """Get the options flow for this handler."""
+        return DeyeCloudOptionsFlow(config_entry)
 
-            _LOGGER.debug("Token response: code=%s (type=%s), msg=%s, data=%s", 
-                         result.get("code"), type(result.get("code")), 
-                         result.get("msg"), result.get("data"))
 
-            # Check for success (Deye uses both 0 and 1000000 as success codes)
-            # Handle both string and integer codes
-            code = result.get("code")
-            if code not in [0, 1000000, "0", "1000000"]:
-                error_msg = result.get("msg", "Unknown error")
-                _LOGGER.error("Token request failed: %s (code: %s)", error_msg, code)
-                raise DeyeCloudAuthError(f"{error_msg} (code: {code})")
+class DeyeCloudOptionsFlow(config_entries.OptionsFlow):
+    """Handle options flow for Deye Cloud."""
 
-            # Token is directly in response as 'accessToken', not in 'data' object
-            self._access_token = result.get("accessToken")
-            
-            if not self._access_token:
-                _LOGGER.error("No access token in response: %s", result)
-                raise DeyeCloudAuthError("Failed to obtain access token - no token in response")
-            
-            # Token expires after 60 days according to docs
-            expires_in = 60 * 24 * 60 * 60  # 60 days in seconds
-            self._token_expiry = time.time() + expires_in - 86400  # Refresh 1 day early
-            
-            _LOGGER.debug("Access token obtained successfully, expires in %d days", expires_in // 86400)
-            return self._access_token
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
 
-        except aiohttp.ClientError as err:
-            _LOGGER.error("Connection error during token request: %s", err)
-            raise DeyeCloudApiError(f"Connection error: {err}") from err
-        except asyncio.TimeoutError as err:
-            _LOGGER.error("Timeout during token request")
-            raise DeyeCloudApiError("Request timeout") from err
-
-    async def get_station_list(self) -> List[Dict[str, Any]]:
-        """Get list of stations."""
-        result = await self._request("POST", "/station/list")
-        return result.get("stationList", [])
-
-    async def get_station_list_with_devices(self) -> List[Dict[str, Any]]:
-        """Get list of stations with their devices."""
-        result = await self._request("POST", "/station/listWithDevice")
-        return result.get("stationList", [])
-
-    async def get_device_list(self) -> List[Dict[str, Any]]:
-        """Get list of devices."""
-        result = await self._request("POST", "/device/list")
-        return result.get("deviceList", [])
-
-    async def get_device_latest_data(self, device_sns: List[str]) -> Dict[str, Any]:
-        """Get latest data for devices (up to 10 at once)."""
-        if len(device_sns) > 10:
-            raise ValueError("Maximum 10 devices per request")
-        
-        data = {"deviceSnList": device_sns}
-        result = await self._request("POST", "/device/latest", data=data)
-        return result
-
-    async def get_station_latest_data(self, station_id: str) -> Dict[str, Any]:
-        """Get latest data for a station."""
-        data = {"stationId": station_id}
-        result = await self._request("POST", "/station/latest", data=data)
-        return result
-
-    async def get_device_measure_points(self, device_sn: str) -> List[str]:
-        """Get available measure points for a device."""
-        data = {"deviceSn": device_sn}
-        result = await self._request("POST", "/device/measurePoints", data=data)
-        return result.get("measurePoints", [])
-
-    async def get_device_history(
-        self,
-        device_sn: str,
-        start_time: int,
-        end_time: int,
-        time_type: str = "day",
+    async def async_step_init(
+        self, user_input: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Get device history data.
-        
-        Args:
-            device_sn: Device serial number
-            start_time: Start timestamp (10-digit Unix timestamp in seconds)
-            end_time: End timestamp (10-digit Unix timestamp in seconds)
-            time_type: 'day', 'month', or 'year'
-        """
-        data = {
-            "deviceSn": device_sn,
-            "startTime": start_time,
-            "endTime": end_time,
-            "timeType": time_type,
-        }
-        result = await self._request("POST", "/device/history", data=data)
-        return result
+        """Manage the options."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
 
-    async def get_battery_config(self, device_sn: str) -> Dict[str, Any]:
-        """Get battery configuration."""
-        data = {"deviceSn": device_sn}
-        result = await self._request("POST", "/config/battery", data=data)
-        return result
-
-    async def get_system_config(self, device_sn: str) -> Dict[str, Any]:
-        """Get system configuration."""
-        data = {"deviceSn": device_sn}
-        result = await self._request("POST", "/config/system", data=data)
-        return result
-
-    async def set_battery_mode(
-        self, device_sn: str, charge_mode: bool
-    ) -> Dict[str, Any]:
-        """Enable or disable battery charge mode."""
-        data = {"deviceSn": device_sn, "chargeMode": charge_mode}
-        result = await self._request("POST", "/order/battery/modeControl", data=data)
-        return result
-
-    async def set_work_mode(
-        self, device_sn: str, work_mode: str
-    ) -> Dict[str, Any]:
-        """Set system work mode.
-        
-        Args:
-            device_sn: Device serial number
-            work_mode: 'SELLING_FIRST', 'ZERO_EXPORT_TO_LOAD', or 'ZERO_EXPORT_TO_CT'
-        """
-        data = {"deviceSn": device_sn, "workMode": work_mode}
-        result = await self._request("POST", "/order/sys/workMode/update", data=data)
-        return result
-
-    async def set_energy_pattern(
-        self, device_sn: str, energy_pattern: str
-    ) -> Dict[str, Any]:
-        """Set energy pattern.
-        
-        Args:
-            device_sn: Device serial number
-            energy_pattern: 'BATTERY_FIRST' or 'LOAD_FIRST'
-        """
-        data = {"deviceSn": device_sn, "energyPattern": energy_pattern}
-        result = await self._request("POST", "/order/sys/energyPattern/update", data=data)
-        return result
-
-    async def close(self) -> None:
-        """Close the client session."""
-        if self._close_session and self._session:
-            await self._session.close()
-            self._session = None
-
-    async def test_connection(self) -> bool:
-        """Test if the connection is working."""
-        try:
-            _LOGGER.debug("Testing connection to Deye Cloud API")
-            await self.obtain_token()
-            _LOGGER.debug("Connection test successful")
-            return True
-        except DeyeCloudAuthError as err:
-            _LOGGER.error("Authentication failed during connection test: %s", err)
-            return False
-        except DeyeCloudApiError as err:
-            _LOGGER.error("API error during connection test: %s", err)
-            return False
-        except Exception as err:
-            _LOGGER.error("Unexpected error during connection test: %s", err)
-            return False
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_SCAN_INTERVAL,
+                        default=self.config_entry.options.get(
+                            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=30, max=3600)),
+                }
+            ),
+        )
