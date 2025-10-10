@@ -147,12 +147,11 @@ class DeyeCloudClient:
                 _LOGGER.error("Token request failed: %s (code: %s)", error_msg, code)
                 raise DeyeCloudAuthError(f"{error_msg} (code: {code})")
 
-            data = result.get("data", {})
-            self._access_token = data.get("access_token")
+            # Token is directly in response as 'accessToken', not in 'data' object
+            self._access_token = result.get("accessToken")
             
             if not self._access_token:
-                _LOGGER.error("No access token in response data: %s", data)
-                _LOGGER.error("Full response: %s", result)
+                _LOGGER.error("No access token in response: %s", result)
                 raise DeyeCloudAuthError("Failed to obtain access token - no token in response")
             
             # Token expires after 60 days according to docs
