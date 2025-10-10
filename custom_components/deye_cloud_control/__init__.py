@@ -116,7 +116,9 @@ class DeyeCloudDataUpdateCoordinator(DataUpdateCoordinator):
         """Fetch data from API."""
         try:
             # Get stations with devices
+            _LOGGER.debug("Fetching station list with devices")
             stations_data = await self.client.get_station_list_with_devices()
+            _LOGGER.debug("Received %d stations", len(stations_data))
             
             data = {
                 "stations": {},
@@ -129,6 +131,8 @@ class DeyeCloudDataUpdateCoordinator(DataUpdateCoordinator):
                 if not station_id:
                     continue
 
+                _LOGGER.debug("Processing station: %s (ID: %s)", station.get("name"), station_id)
+
                 # Get station latest data
                 try:
                     station_latest = await self.client.get_station_latest_data(
@@ -138,6 +142,7 @@ class DeyeCloudDataUpdateCoordinator(DataUpdateCoordinator):
                         "info": station,
                         "data": station_latest,
                     }
+                    _LOGGER.debug("Station %s data retrieved successfully", station_id)
                 except DeyeCloudApiError as err:
                     _LOGGER.warning(
                         "Failed to get data for station %s: %s", station_id, err
@@ -145,13 +150,16 @@ class DeyeCloudDataUpdateCoordinator(DataUpdateCoordinator):
 
                 # Process devices in this station
                 devices = station.get("deviceList", [])
+                _LOGGER.debug("Station %s has %d devices", station_id, len(devices))
                 device_sns = [dev.get("deviceSn") for dev in devices if dev.get("deviceSn")]
                 
                 # Fetch device data in batches of 10
                 for i in range(0, len(device_sns), 10):
                     batch = device_sns[i:i+10]
+                    _LOGGER.debug("Fetching data for device batch: %s", batch)
                     try:
                         device_data = await self.client.get_device_latest_data(batch)
+                        _LOGGER.debug("Device data response: %s", device_data)
                         
                         # Store device data
                         for dev in devices:
@@ -161,6 +169,7 @@ class DeyeCloudDataUpdateCoordinator(DataUpdateCoordinator):
                                     "info": dev,
                                     "data": device_data[dev_sn],
                                 }
+                                _LOGGER.debug("Stored data for device %s", dev_sn)
                     except DeyeCloudApiError as err:
                         _LOGGER.warning(
                             "Failed to get data for devices %s: %s", batch, err
@@ -168,6 +177,9 @@ class DeyeCloudDataUpdateCoordinator(DataUpdateCoordinator):
 
             self.stations = list(data["stations"].keys())
             self.devices = list(data["devices"].keys())
+            
+            _LOGGER.info("Update complete: %d stations, %d devices", 
+                        len(self.stations), len(self.devices))
 
             return data
 
