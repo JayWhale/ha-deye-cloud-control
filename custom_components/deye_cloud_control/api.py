@@ -100,8 +100,15 @@ class DeyeCloudClient:
                     raise DeyeCloudAuthError(error_msg)
                 raise DeyeCloudApiError(error_msg)
 
-            _LOGGER.debug("API response data field: %s", result.get("data"))
-            return result.get("data", {})
+            # Deye API returns data either in "data" field or directly in root
+            # If "data" field exists and is not None, use it; otherwise return full result
+            data = result.get("data")
+            if data is not None:
+                _LOGGER.debug("API response has 'data' field: %s", data)
+                return data
+            else:
+                _LOGGER.debug("API response has no 'data' field, returning full result")
+                return result
 
         except aiohttp.ClientError as err:
             _LOGGER.error("Connection error: %s", err)
