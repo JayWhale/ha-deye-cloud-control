@@ -89,6 +89,8 @@ class DeyeCloudClient:
                     ) as response:
                         response.raise_for_status()
                         result = await response.json()
+                        
+            _LOGGER.debug("Full API response for %s: %s", endpoint, result)
 
             # Check API response code (0 and 1000000 are success codes)
             # Handle both string and integer codes
