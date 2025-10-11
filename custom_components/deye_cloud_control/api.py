@@ -202,9 +202,33 @@ class DeyeCloudClient:
         if len(device_sns) > 10:
             raise ValueError("Maximum 10 devices per request")
         
-        data = {"deviceSnList": device_sns}
+        # Use "deviceList" not "deviceSnList" - this is what the API expects
+        data = {"deviceList": device_sns}
+        _LOGGER.debug("Requesting device data with payload: %s", data)
         result = await self._request("POST", "/device/latest", data=data)
-        return result
+        _LOGGER.debug("Device latest data result: %s", result)
+        
+        # Parse the response - it comes back as deviceDataList
+        device_data_list = result.get("deviceDataList", [])
+        _LOGGER.debug("Device data list: %s", device_data_list)
+        
+        # Convert to dict keyed by deviceSn for easier lookup
+        parsed_data = {}
+        for device_data in device_data_list:
+            device_sn = device_data.get("deviceSn")
+            data_list = device_data.get("dataList", [])
+            if device_sn:
+                # Convert dataList to dict for easier access
+                data_dict = {}
+                for item in data_list:
+                    key = item.get("key")
+                    value = item.get("value")
+                    if key:
+                        data_dict[key] = value
+                parsed_data[device_sn] = data_dict
+        
+        _LOGGER.debug("Parsed device data: %s", parsed_data)
+        return parsed_data
 
     async def get_station_latest_data(self, station_id: str) -> Dict[str, Any]:
         """Get latest data for a station."""
