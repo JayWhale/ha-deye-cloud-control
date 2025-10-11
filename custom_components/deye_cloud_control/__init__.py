@@ -118,7 +118,8 @@ class DeyeCloudDataUpdateCoordinator(DataUpdateCoordinator):
             # Get stations with devices
             _LOGGER.debug("Fetching station list with devices")
             stations_data = await self.client.get_station_list_with_devices()
-            _LOGGER.debug("Received %d stations", len(stations_data))
+            _LOGGER.debug("Raw stations response: %s", stations_data)
+            _LOGGER.debug("Received %d stations", len(stations_data) if isinstance(stations_data, list) else 0)
             
             data = {
                 "stations": {},
