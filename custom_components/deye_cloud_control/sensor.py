@@ -27,50 +27,55 @@ from .const import COORDINATOR, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# Sensor definitions: (key, name, unit, device_class, state_class, icon)
-STATION_SENSORS = [
-    ("todayEnergy", "Today Energy", UnitOfEnergy.KILO_WATT_HOUR, SensorDeviceClass.ENERGY, SensorStateClass.TOTAL_INCREASING, "mdi:solar-power"),
-    ("totalEnergy", "Total Energy", UnitOfEnergy.KILO_WATT_HOUR, SensorDeviceClass.ENERGY, SensorStateClass.TOTAL, "mdi:solar-power"),
-    ("currentPower", "Current Power", UnitOfPower.KILO_WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, "mdi:flash"),
-    ("gridPower", "Grid Power", UnitOfPower.KILO_WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, "mdi:transmission-tower"),
-    ("buyPower", "Buy Power", UnitOfPower.KILO_WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, "mdi:transmission-tower-import"),
-    ("sellPower", "Sell Power", UnitOfPower.KILO_WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, "mdi:transmission-tower-export"),
-]
+# Map units from API to Home Assistant units
+UNIT_MAP = {
+    "W": UnitOfPower.WATT,
+    "kW": UnitOfPower.KILO_WATT,
+    "kWh": UnitOfEnergy.KILO_WATT_HOUR,
+    "V": UnitOfElectricPotential.VOLT,
+    "A": UnitOfElectricCurrent.AMPERE,
+    "Hz": UnitOfFrequency.HERTZ,
+    "°C": UnitOfTemperature.CELSIUS,
+    "%": PERCENTAGE,
+    "VA": "VA",  # Apparent power
+}
 
-DEVICE_SENSORS = [
-    ("pac", "AC Power", UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, "mdi:flash"),
-    ("dailyEnergy", "Daily Energy", UnitOfEnergy.KILO_WATT_HOUR, SensorDeviceClass.ENERGY, SensorStateClass.TOTAL_INCREASING, "mdi:solar-power"),
-    ("totalEnergy", "Total Energy", UnitOfEnergy.KILO_WATT_HOUR, SensorDeviceClass.ENERGY, SensorStateClass.TOTAL, "mdi:solar-power"),
-    
-    # Battery sensors
-    ("batteryPower", "Battery Power", UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, "mdi:battery"),
-    ("batterySoc", "Battery SOC", PERCENTAGE, SensorDeviceClass.BATTERY, SensorStateClass.MEASUREMENT, "mdi:battery"),
-    ("batteryVoltage", "Battery Voltage", UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, SensorStateClass.MEASUREMENT, "mdi:battery"),
-    ("batteryCurrent", "Battery Current", UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT, "mdi:battery"),
-    ("batteryTemperature", "Battery Temperature", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:thermometer"),
-    
-    # Grid sensors
-    ("gridVoltage", "Grid Voltage", UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, SensorStateClass.MEASUREMENT, "mdi:sine-wave"),
-    ("gridCurrent", "Grid Current", UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT, "mdi:current-ac"),
-    ("gridFrequency", "Grid Frequency", UnitOfFrequency.HERTZ, SensorDeviceClass.FREQUENCY, SensorStateClass.MEASUREMENT, "mdi:sine-wave"),
-    ("gridPower", "Grid Power", UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, "mdi:transmission-tower"),
-    
-    # Load sensors
-    ("loadPower", "Load Power", UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, "mdi:home-lightning-bolt"),
-    ("loadVoltage", "Load Voltage", UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, SensorStateClass.MEASUREMENT, "mdi:home-lightning-bolt"),
-    ("loadCurrent", "Load Current", UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT, "mdi:home-lightning-bolt"),
-    
-    # PV sensors
-    ("pv1Power", "PV1 Power", UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, "mdi:solar-panel"),
-    ("pv1Voltage", "PV1 Voltage", UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, SensorStateClass.MEASUREMENT, "mdi:solar-panel"),
-    ("pv1Current", "PV1 Current", UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT, "mdi:solar-panel"),
-    ("pv2Power", "PV2 Power", UnitOfPower.WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, "mdi:solar-panel"),
-    ("pv2Voltage", "PV2 Voltage", UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE, SensorStateClass.MEASUREMENT, "mdi:solar-panel"),
-    ("pv2Current", "PV2 Current", UnitOfElectricCurrent.AMPERE, SensorDeviceClass.CURRENT, SensorStateClass.MEASUREMENT, "mdi:solar-panel"),
-    
-    # Inverter sensors
-    ("inverterTemperature", "Inverter Temperature", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:thermometer"),
-]
+# Map sensor keys to device classes
+DEVICE_CLASS_MAP = {
+    "Power": SensorDeviceClass.POWER,
+    "Energy": SensorDeviceClass.ENERGY,
+    "Voltage": SensorDeviceClass.VOLTAGE,
+    "Current": SensorDeviceClass.CURRENT,
+    "Frequency": SensorDeviceClass.FREQUENCY,
+    "Temperature": SensorDeviceClass.TEMPERATURE,
+    "SOC": SensorDeviceClass.BATTERY,
+    "BMSSOC": SensorDeviceClass.BATTERY,
+}
+
+# Map sensor keys to state classes
+STATE_CLASS_MAP = {
+    "Total": SensorStateClass.TOTAL,
+    "Daily": SensorStateClass.TOTAL_INCREASING,
+}
+
+
+def get_device_class(key: str) -> SensorDeviceClass | None:
+    """Determine device class from sensor key."""
+    for pattern, device_class in DEVICE_CLASS_MAP.items():
+        if pattern in key:
+            return device_class
+    return None
+
+
+def get_state_class(key: str) -> SensorStateClass | None:
+    """Determine state class from sensor key."""
+    for pattern, state_class in STATE_CLASS_MAP.items():
+        if pattern in key:
+            return state_class
+    # Default to measurement for power/voltage/current sensors
+    if any(x in key for x in ["Power", "Voltage", "Current", "Frequency", "SOC"]):
+        return SensorStateClass.MEASUREMENT
+    return None
 
 
 async def async_setup_entry(
@@ -78,40 +83,44 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Deye Cloud sensors."""
+    """Set up Deye Cloud Control sensors."""
     coordinator = hass.data[DOMAIN][entry.entry_id][COORDINATOR]
 
     entities = []
 
     # Add station sensors
     for station_id in coordinator.stations:
-        for sensor_def in STATION_SENSORS:
+        station_data = coordinator.data.get("stations", {}).get(station_id, {})
+        station_latest = station_data.get("data", {})
+        
+        # Create sensors for all station data points
+        for key, value in station_latest.items():
+            if key in ["code", "msg", "success", "requestId", "lastUpdateTime"]:
+                continue  # Skip metadata fields
+                
             entities.append(
                 DeyeCloudStationSensor(
                     coordinator=coordinator,
                     station_id=station_id,
-                    sensor_key=sensor_def[0],
-                    sensor_name=sensor_def[1],
-                    unit=sensor_def[2],
-                    device_class=sensor_def[3],
-                    state_class=sensor_def[4],
-                    icon=sensor_def[5],
+                    sensor_key=key,
                 )
             )
 
-    # Add device sensors
+    # Add device sensors - dynamically create for all available data points
     for device_sn in coordinator.devices:
-        for sensor_def in DEVICE_SENSORS:
+        device_data = coordinator.data.get("devices", {}).get(device_sn, {})
+        data_points = device_data.get("data", {})
+        
+        # Create a sensor for each data point
+        for key, value in data_points.items():
+            if not key:  # Skip None keys
+                continue
+                
             entities.append(
                 DeyeCloudDeviceSensor(
                     coordinator=coordinator,
                     device_sn=device_sn,
-                    sensor_key=sensor_def[0],
-                    sensor_name=sensor_def[1],
-                    unit=sensor_def[2],
-                    device_class=sensor_def[3],
-                    state_class=sensor_def[4],
-                    icon=sensor_def[5],
+                    sensor_key=key,
                 )
             )
 
@@ -126,27 +135,41 @@ class DeyeCloudStationSensor(CoordinatorEntity, SensorEntity):
         coordinator,
         station_id: str,
         sensor_key: str,
-        sensor_name: str,
-        unit: str,
-        device_class: SensorDeviceClass | None,
-        state_class: SensorStateClass | None,
-        icon: str,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._station_id = station_id
         self._sensor_key = sensor_key
-        self._attr_name = f"{self._get_station_name()} {sensor_name}"
+        
+        # Create friendly name from key
+        name = sensor_key.replace("_", " ").title()
+        self._attr_name = f"{self._get_station_name()} {name}"
         self._attr_unique_id = f"{station_id}_{sensor_key}"
-        self._attr_native_unit_of_measurement = unit
-        self._attr_device_class = device_class
-        self._attr_state_class = state_class
-        self._attr_icon = icon
+        
+        # Auto-detect device class and state class
+        self._attr_device_class = get_device_class(sensor_key)
+        self._attr_state_class = get_state_class(sensor_key)
+        self._attr_icon = self._get_icon()
 
     def _get_station_name(self) -> str:
         """Get station name."""
         station_data = self.coordinator.data.get("stations", {}).get(self._station_id, {})
         return station_data.get("info", {}).get("name", f"Station {self._station_id}")
+
+    def _get_icon(self) -> str:
+        """Get icon based on sensor type."""
+        key_lower = self._sensor_key.lower()
+        if "power" in key_lower or "generation" in key_lower:
+            return "mdi:flash"
+        elif "energy" in key_lower:
+            return "mdi:lightning-bolt"
+        elif "battery" in key_lower or "soc" in key_lower:
+            return "mdi:battery"
+        elif "grid" in key_lower:
+            return "mdi:transmission-tower"
+        elif "consumption" in key_lower or "load" in key_lower:
+            return "mdi:home-lightning-bolt"
+        return "mdi:chart-line"
 
     @property
     def native_value(self) -> float | None:
@@ -193,30 +216,57 @@ class DeyeCloudDeviceSensor(CoordinatorEntity, SensorEntity):
         coordinator,
         device_sn: str,
         sensor_key: str,
-        sensor_name: str,
-        unit: str,
-        device_class: SensorDeviceClass | None,
-        state_class: SensorStateClass | None,
-        icon: str,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._device_sn = device_sn
         self._sensor_key = sensor_key
-        self._attr_name = f"{self._get_device_name()} {sensor_name}"
+        
+        # Create friendly name from key
+        name = sensor_key.replace("_", " ").title()
+        self._attr_name = f"{self._get_device_name()} {name}"
         self._attr_unique_id = f"{device_sn}_{sensor_key}"
-        self._attr_native_unit_of_measurement = unit
-        self._attr_device_class = device_class
-        self._attr_state_class = state_class
-        self._attr_icon = icon
+        
+        # Auto-detect device class and state class
+        self._attr_device_class = get_device_class(sensor_key)
+        self._attr_state_class = get_state_class(sensor_key)
+        self._attr_icon = self._get_icon()
 
     def _get_device_name(self) -> str:
         """Get device name."""
         device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
-        return device_data.get("info", {}).get("deviceName", f"Device {self._device_sn}")
+        device_type = device_data.get("info", {}).get("deviceType", "Device")
+        return f"{device_type} {self._device_sn}"
+
+    def _get_icon(self) -> str:
+        """Get icon based on sensor type."""
+        key_lower = self._sensor_key.lower()
+        if "power" in key_lower:
+            return "mdi:flash"
+        elif "energy" in key_lower or "production" in key_lower:
+            return "mdi:solar-power"
+        elif "battery" in key_lower or "soc" in key_lower or "bms" in key_lower:
+            return "mdi:battery"
+        elif "grid" in key_lower:
+            return "mdi:transmission-tower"
+        elif "load" in key_lower or "consumption" in key_lower or "ups" in key_lower:
+            return "mdi:home-lightning-bolt"
+        elif "voltage" in key_lower:
+            return "mdi:sine-wave"
+        elif "current" in key_lower:
+            return "mdi:current-ac"
+        elif "frequency" in key_lower:
+            return "mdi:waveform"
+        elif "pv" in key_lower or "dc" in key_lower or "solar" in key_lower:
+            return "mdi:solar-panel"
+        elif "temperature" in key_lower:
+            return "mdi:thermometer"
+        elif "gen" in key_lower or "generator" in key_lower:
+            return "mdi:engine"
+        return "mdi:gauge"
 
     @property
-    def native_value(self) -> float | None:
+    def native_value(self) -> float | str | None:
         """Return the state of the sensor."""
         device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
         data = device_data.get("data", {})
@@ -226,7 +276,33 @@ class DeyeCloudDeviceSensor(CoordinatorEntity, SensorEntity):
             try:
                 return float(value)
             except (ValueError, TypeError):
-                return None
+                return str(value)
+        return None
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        """Return the unit based on the sensor key."""
+        key_lower = self._sensor_key.lower()
+        
+        if "power" in key_lower and "reactive" not in key_lower:
+            if "k" in key_lower:
+                return UnitOfPower.KILO_WATT
+            return UnitOfPower.WATT
+        elif "energy" in key_lower or "production" in key_lower or "consumption" in key_lower:
+            return UnitOfEnergy.KILO_WATT_HOUR
+        elif "voltage" in key_lower:
+            return UnitOfElectricPotential.VOLT
+        elif "current" in key_lower:
+            return UnitOfElectricCurrent.AMPERE
+        elif "frequency" in key_lower:
+            return UnitOfFrequency.HERTZ
+        elif "temperature" in key_lower:
+            return UnitOfTemperature.CELSIUS
+        elif "soc" in key_lower:
+            return PERCENTAGE
+        elif "apparentpower" in key_lower:
+            return "VA"
+            
         return None
 
     @property
@@ -239,8 +315,7 @@ class DeyeCloudDeviceSensor(CoordinatorEntity, SensorEntity):
             "identifiers": {(DOMAIN, self._device_sn)},
             "name": self._get_device_name(),
             "manufacturer": "Deye",
-            "model": info.get("deviceModel", "Inverter"),
-            "sw_version": info.get("firmwareVersion"),
+            "model": info.get("deviceType", "Inverter"),
             "serial_number": self._device_sn,
         }
 
