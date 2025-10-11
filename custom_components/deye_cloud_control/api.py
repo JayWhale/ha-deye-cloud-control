@@ -100,6 +100,7 @@ class DeyeCloudClient:
                     raise DeyeCloudAuthError(error_msg)
                 raise DeyeCloudApiError(error_msg)
 
+            _LOGGER.debug("API response data field: %s", result.get("data"))
             return result.get("data", {})
 
         except aiohttp.ClientError as err:
@@ -177,7 +178,10 @@ class DeyeCloudClient:
     async def get_station_list_with_devices(self) -> List[Dict[str, Any]]:
         """Get list of stations with their devices."""
         result = await self._request("POST", "/station/listWithDevice")
-        return result.get("stationList", [])
+        _LOGGER.debug("Station list response: %s", result)
+        station_list = result.get("stationList", [])
+        _LOGGER.debug("Extracted station list: %s", station_list)
+        return station_list
 
     async def get_device_list(self) -> List[Dict[str, Any]]:
         """Get list of devices."""
