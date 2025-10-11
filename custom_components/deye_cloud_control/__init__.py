@@ -129,10 +129,17 @@ class DeyeCloudDataUpdateCoordinator(DataUpdateCoordinator):
             # Process each station
             for station in stations_data:
                 station_id = station.get("id")
+                station_name = station.get("name", "")
+                
+                # Skip demo stations
+                if "demo" in station_name.lower():
+                    _LOGGER.debug("Skipping demo station: %s (ID: %s)", station_name, station_id)
+                    continue
+                
                 if not station_id:
                     continue
 
-                _LOGGER.debug("Processing station: %s (ID: %s)", station.get("name"), station_id)
+                _LOGGER.debug("Processing station: %s (ID: %s)", station_name, station_id)
 
                 # Get station latest data
                 try:
@@ -150,7 +157,8 @@ class DeyeCloudDataUpdateCoordinator(DataUpdateCoordinator):
                     )
 
                 # Process devices in this station
-                devices = station.get("deviceList", [])
+                devices = station.get("deviceListItems", [])  # Changed from deviceList to deviceListItems
+                _LOGGER.debug("Station %s raw device data: %s", station_id, devices)
                 _LOGGER.debug("Station %s has %d devices", station_id, len(devices))
                 device_sns = [dev.get("deviceSn") for dev in devices if dev.get("deviceSn")]
                 
