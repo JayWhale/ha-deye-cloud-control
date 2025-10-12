@@ -45,7 +45,7 @@ class DeyeCloudBatteryChargeModeSwitch(CoordinatorEntity, SwitchEntity):
         """Initialize the switch."""
         super().__init__(coordinator)
         self._device_sn = device_sn
-        self._attr_name = f"{self._get_device_name()} Battery Charge Mode"
+        self._attr_name = "Deye Battery Charge Mode"
         self._attr_unique_id = f"{device_sn}_battery_charge_mode"
         self._attr_icon = "mdi:battery-charging"
 
