@@ -69,9 +69,18 @@ class DeyeCloudWorkModeSelect(CoordinatorEntity, SelectEntity):
         """Return the selected option."""
         device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
         data = device_data.get("data", {})
-        work_mode = data.get("workMode")
+        config = device_data.get("config", {})
         
-        if work_mode in WORK_MODES:
+        # Try different possible keys
+        work_mode = (
+            data.get("workMode") or 
+            data.get("WorkMode") or 
+            data.get("SystemWorkMode") or
+            config.get("workMode") or
+            config.get("systemWorkMode")
+        )
+        
+        if work_mode and work_mode in WORK_MODES:
             return work_mode
         return None
 
@@ -136,9 +145,18 @@ class DeyeCloudEnergyPatternSelect(CoordinatorEntity, SelectEntity):
         """Return the selected option."""
         device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
         data = device_data.get("data", {})
-        energy_pattern = data.get("energyPattern")
+        config = device_data.get("config", {})
         
-        if energy_pattern in ENERGY_PATTERNS:
+        # Try different possible keys
+        energy_pattern = (
+            data.get("energyPattern") or 
+            data.get("EnergyPattern") or 
+            data.get("SystemEnergyPattern") or
+            config.get("energyPattern") or
+            config.get("systemEnergyPattern")
+        )
+        
+        if energy_pattern and energy_pattern in ENERGY_PATTERNS:
             return energy_pattern
         return None
 
