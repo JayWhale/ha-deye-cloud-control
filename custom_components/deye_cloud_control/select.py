@@ -54,7 +54,7 @@ class DeyeCloudWorkModeSelect(CoordinatorEntity, SelectEntity):
         """Initialize the select."""
         super().__init__(coordinator)
         self._device_sn = device_sn
-        self._attr_name = f"{self._get_device_name()} Work Mode"
+        self._attr_name = "Deye Work Mode"
         self._attr_unique_id = f"{device_sn}_work_mode"
         self._attr_options = WORK_MODES
         self._attr_icon = "mdi:cog"
@@ -130,7 +130,7 @@ class DeyeCloudEnergyPatternSelect(CoordinatorEntity, SelectEntity):
         """Initialize the select."""
         super().__init__(coordinator)
         self._device_sn = device_sn
-        self._attr_name = f"{self._get_device_name()} Energy Pattern"
+        self._attr_name = "Deye Energy Pattern"
         self._attr_unique_id = f"{device_sn}_energy_pattern"
         self._attr_options = ENERGY_PATTERNS
         self._attr_icon = "mdi:battery-arrow-up"
