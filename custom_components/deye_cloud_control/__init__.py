@@ -168,17 +168,37 @@ class DeyeCloudDataUpdateCoordinator(DataUpdateCoordinator):
                     _LOGGER.debug("Fetching data for device batch: %s", batch)
                     try:
                         device_data = await self.client.get_device_latest_data(batch)
-                        _LOGGER.debug("Device data response: %s", device_data)
+                        _LOGGER.debug("Device data response type: %s, content: %s", type(device_data), device_data)
                         
                         # Store device data
                         for dev in devices:
                             dev_sn = dev.get("deviceSn")
+                            _LOGGER.debug("Processing device %s, checking if in response", dev_sn)
                             if dev_sn in device_data:
+                                # Also try to fetch device config for switches/selects
+                                config_data = {}
+                                try:
+                                    system_config = await self.client.get_system_config(dev_sn)
+                                    config_data.update(system_config)
+                                    _LOGGER.debug("System config for %s: %s", dev_sn, system_config)
+                                except DeyeCloudApiError as err:
+                                    _LOGGER.debug("Could not fetch system config for %s: %s", dev_sn, err)
+                                
+                                try:
+                                    battery_config = await self.client.get_battery_config(dev_sn)
+                                    config_data.update(battery_config)
+                                    _LOGGER.debug("Battery config for %s: %s", dev_sn, battery_config)
+                                except DeyeCloudApiError as err:
+                                    _LOGGER.debug("Could not fetch battery config for %s: %s", dev_sn, err)
+                                
                                 data["devices"][dev_sn] = {
                                     "info": dev,
                                     "data": device_data[dev_sn],
+                                    "config": config_data,
                                 }
                                 _LOGGER.debug("Stored data for device %s", dev_sn)
+                            else:
+                                _LOGGER.warning("Device %s not found in API response", dev_sn)
                     except DeyeCloudApiError as err:
                         _LOGGER.warning(
                             "Failed to get data for devices %s: %s", batch, err
