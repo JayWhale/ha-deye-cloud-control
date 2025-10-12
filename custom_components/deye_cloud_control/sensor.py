@@ -222,9 +222,9 @@ class DeyeCloudDeviceSensor(CoordinatorEntity, SensorEntity):
         self._device_sn = device_sn
         self._sensor_key = sensor_key
         
-        # Create friendly name from key
+        # Create friendly name from key - just the sensor name, no device prefix
         name = sensor_key.replace("_", " ").title()
-        self._attr_name = f"{self._get_device_name()} {name}"
+        self._attr_name = f"Deye {name}"
         self._attr_unique_id = f"{device_sn}_{sensor_key}"
         
         # Auto-detect device class and state class
