@@ -58,11 +58,26 @@ class DeyeCloudBatteryChargeModeSwitch(CoordinatorEntity, SwitchEntity):
     def is_on(self) -> bool | None:
         """Return true if the switch is on."""
         device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
+        
+        # First try data, then config
         data = device_data.get("data", {})
-        charge_mode = data.get("chargeMode")
+        config = device_data.get("config", {})
+        
+        # Try different possible keys for charge mode
+        charge_mode = (
+            data.get("chargeMode") or 
+            data.get("ChargeMode") or 
+            data.get("BatteryChargeMode") or
+            config.get("chargeMode") or
+            config.get("enableGridCharge")
+        )
         
         if charge_mode is not None:
+            # Handle both boolean and string values
+            if isinstance(charge_mode, str):
+                return charge_mode.lower() in ["true", "1", "on", "enabled"]
             return bool(charge_mode)
+        
         return None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
