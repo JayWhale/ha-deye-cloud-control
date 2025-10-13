@@ -312,6 +312,48 @@ class DeyeCloudClient:
         result = await self._request("POST", "/order/sys/energyPattern/update", data=data)
         return result
 
+    async def set_battery_parameter(
+        self, device_sn: str, parameter: str, value: int
+    ) -> Dict[str, Any]:
+        """Set battery parameter value.
+        
+        Args:
+            device_sn: Device serial number
+            parameter: Parameter name (e.g., 'maxChargeCurrent', 'maxDischargeCurrent')
+            value: Parameter value
+        """
+        data = {
+            "deviceSn": device_sn,
+            "parameterName": parameter,
+            "parameterValue": value,
+        }
+        result = await self._request("POST", "/order/battery/parameter/update", data=data)
+        return result
+
+    async def get_tou_config(self, device_sn: str) -> Dict[str, Any]:
+        """Get Time of Use configuration."""
+        data = {"deviceSn": device_sn}
+        result = await self._request("POST", "/config/tou", data=data)
+        return result
+
+    async def set_tou_config(
+        self, device_sn: str, tou_items: list[dict], timeout_seconds: int = 30
+    ) -> Dict[str, Any]:
+        """Set Time of Use configuration.
+        
+        Args:
+            device_sn: Device serial number
+            tou_items: List of TOU setting items
+            timeout_seconds: Command timeout
+        """
+        data = {
+            "deviceSn": device_sn,
+            "timeUseSettingItems": tou_items,
+            "timeoutSeconds": timeout_seconds,
+        }
+        result = await self._request("POST", "/order/sys/tou/update", data=data)
+        return result
+
     async def close(self) -> None:
         """Close the client session."""
         if self._close_session and self._session:
