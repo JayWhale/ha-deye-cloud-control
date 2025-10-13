@@ -191,6 +191,13 @@ class DeyeCloudDataUpdateCoordinator(DataUpdateCoordinator):
                                 except DeyeCloudApiError as err:
                                     _LOGGER.debug("Could not fetch battery config for %s: %s", dev_sn, err)
                                 
+                                try:
+                                    tou_config = await self.client.get_tou_config(dev_sn)
+                                    config_data["tou"] = tou_config
+                                    _LOGGER.debug("TOU config for %s: %s", dev_sn, tou_config)
+                                except DeyeCloudApiError as err:
+                                    _LOGGER.debug("Could not fetch TOU config for %s: %s", dev_sn, err)
+                                
                                 data["devices"][dev_sn] = {
                                     "info": dev,
                                     "data": device_data[dev_sn],
