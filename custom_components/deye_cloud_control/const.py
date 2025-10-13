@@ -29,7 +29,7 @@ REGIONS = {
 }
 
 # Platforms
-PLATFORMS = [Platform.SENSOR, Platform.SWITCH, Platform.SELECT]
+PLATFORMS = [Platform.SENSOR, Platform.SWITCH, Platform.SELECT, Platform.NUMBER]
 
 # Coordinator
 COORDINATOR = "coordinator"
