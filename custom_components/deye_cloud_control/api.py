@@ -354,6 +354,38 @@ class DeyeCloudClient:
         result = await self._request("POST", "/order/sys/tou/update", data=data)
         return result
 
+    async def set_solar_sell(
+        self, device_sn: str, enabled: bool
+    ) -> Dict[str, Any]:
+        """Enable or disable solar sell.
+        
+        Args:
+            device_sn: Device serial number
+            enabled: True to enable, False to disable
+        """
+        data = {
+            "deviceSn": device_sn,
+            "solarSellEnable": enabled,
+        }
+        result = await self._request("POST", "/order/sys/solarSell/control", data=data)
+        return result
+
+    async def set_max_sell_power(
+        self, device_sn: str, power: int
+    ) -> Dict[str, Any]:
+        """Set max sell power.
+        
+        Args:
+            device_sn: Device serial number
+            power: Max sell power in watts
+        """
+        data = {
+            "deviceSn": device_sn,
+            "maxSellPower": power,
+        }
+        result = await self._request("POST", "/order/sys/power/update", data=data)
+        return result
+
     async def close(self) -> None:
         """Close the client session."""
         if self._close_session and self._session:
