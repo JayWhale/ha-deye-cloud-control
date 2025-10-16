@@ -45,25 +45,20 @@ async def async_setup_entry(
 class DeyeCloudBatteryChargeModeSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of a Deye Cloud Battery Charge Mode Switch."""
 
+    _attr_device_class = None  # Simple switch, no special device class
+
     def __init__(self, coordinator, device_sn: str) -> None:
         """Initialize the switch."""
         super().__init__(coordinator)
         self._device_sn = device_sn
-        self._attr_name = "Deye Battery Charge Mode"
+        self._attr_name = "Deye Battery Charging Mode"
         self._attr_unique_id = f"{device_sn}_battery_charge_mode"
         self._attr_icon = "mdi:battery-charging"
-
-    def _get_device_name(self) -> str:
-        """Get device name."""
-        device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
-        return device_data.get("info", {}).get("deviceName", f"Device {self._device_sn}")
 
     @property
     def is_on(self) -> bool | None:
         """Return true if the switch is on."""
         device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
-        
-        # First try data, then config
         data = device_data.get("data", {})
         config = device_data.get("config", {})
         
@@ -73,13 +68,13 @@ class DeyeCloudBatteryChargeModeSwitch(CoordinatorEntity, SwitchEntity):
             data.get("ChargeMode") or 
             data.get("BatteryChargeMode") or
             config.get("chargeMode") or
-            config.get("enableGridCharge")
+            config.get("batteryChargeMode")
         )
         
         if charge_mode is not None:
             # Handle both boolean and string values
             if isinstance(charge_mode, str):
-                return charge_mode.lower() in ["true", "1", "on", "enabled"]
+                return charge_mode.lower() in ["true", "1", "on", "enabled", "enable"]
             return bool(charge_mode)
         
         return None
@@ -93,7 +88,7 @@ class DeyeCloudBatteryChargeModeSwitch(CoordinatorEntity, SwitchEntity):
             )
             await self.coordinator.async_request_refresh()
         except DeyeCloudApiError as err:
-            _LOGGER.error("Failed to turn on battery charge mode: %s", err)
+            _LOGGER.error("Failed to enable battery charge mode: %s", err)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
@@ -104,7 +99,7 @@ class DeyeCloudBatteryChargeModeSwitch(CoordinatorEntity, SwitchEntity):
             )
             await self.coordinator.async_request_refresh()
         except DeyeCloudApiError as err:
-            _LOGGER.error("Failed to turn off battery charge mode: %s", err)
+            _LOGGER.error("Failed to disable battery charge mode: %s", err)
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -114,10 +109,9 @@ class DeyeCloudBatteryChargeModeSwitch(CoordinatorEntity, SwitchEntity):
         
         return {
             "identifiers": {(DOMAIN, self._device_sn)},
-            "name": self._get_device_name(),
+            "name": f"INVERTER {self._device_sn}",
             "manufacturer": "Deye",
-            "model": info.get("deviceModel", "Inverter"),
-            "sw_version": info.get("firmwareVersion"),
+            "model": info.get("deviceType", "Inverter"),
             "serial_number": self._device_sn,
         }
 
@@ -133,6 +127,8 @@ class DeyeCloudBatteryChargeModeSwitch(CoordinatorEntity, SwitchEntity):
 class DeyeCloudSolarSellSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of a Deye Cloud Solar Sell Switch."""
 
+    _attr_device_class = None  # Simple switch, no special device class
+
     def __init__(self, coordinator, device_sn: str) -> None:
         """Initialize the switch."""
         super().__init__(coordinator)
@@ -145,8 +141,6 @@ class DeyeCloudSolarSellSwitch(CoordinatorEntity, SwitchEntity):
     def is_on(self) -> bool | None:
         """Return true if the switch is on."""
         device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
-        
-        # Try data first, then config
         data = device_data.get("data", {})
         config = device_data.get("config", {})
         
