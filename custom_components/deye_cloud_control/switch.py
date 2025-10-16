@@ -63,11 +63,13 @@ class DeyeCloudBatteryChargeModeSwitch(CoordinatorEntity, SwitchEntity):
         data = device_data.get("data", {})
         config = device_data.get("config", {})
         
-        # Log what we're getting from the API
-        _LOGGER.debug(
-            "Battery Charge Mode - Device data keys: %s, data keys: %s, config keys: %s",
-            list(device_data.keys()),
-            list(data.keys()),
+        # Log ALL keys we're getting from the API for debugging
+        _LOGGER.warning(
+            "Battery Charge Mode DEBUG - ALL data keys: %s",
+            list(data.keys())
+        )
+        _LOGGER.warning(
+            "Battery Charge Mode DEBUG - ALL config keys: %s",
             list(config.keys())
         )
         
@@ -174,11 +176,13 @@ class DeyeCloudSolarSellSwitch(CoordinatorEntity, SwitchEntity):
         data = device_data.get("data", {})
         config = device_data.get("config", {})
         
-        # Log what we're getting from the API
-        _LOGGER.debug(
-            "Solar Sell - Device data keys: %s, data keys: %s, config keys: %s",
-            list(device_data.keys()),
-            list(data.keys()),
+        # Log ALL keys we're getting from the API for debugging
+        _LOGGER.warning(
+            "Solar Sell DEBUG - ALL data keys: %s",
+            list(data.keys())
+        )
+        _LOGGER.warning(
+            "Solar Sell DEBUG - ALL config keys: %s",
             list(config.keys())
         )
         
