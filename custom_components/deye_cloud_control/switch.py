@@ -26,14 +26,18 @@ async def async_setup_entry(
 
     entities = []
 
-    # Add battery charge mode switch for each device
+    # Add battery charge mode switch and solar sell switch for each device
     for device_sn in coordinator.devices:
-        entities.append(
+        entities.extend([
             DeyeCloudBatteryChargeModeSwitch(
                 coordinator=coordinator,
                 device_sn=device_sn,
-            )
-        )
+            ),
+            DeyeCloudSolarSellSwitch(
+                coordinator=coordinator,
+                device_sn=device_sn,
+            ),
+        ])
 
     async_add_entities(entities)
 
@@ -114,6 +118,88 @@ class DeyeCloudBatteryChargeModeSwitch(CoordinatorEntity, SwitchEntity):
             "manufacturer": "Deye",
             "model": info.get("deviceModel", "Inverter"),
             "sw_version": info.get("firmwareVersion"),
+            "serial_number": self._device_sn,
+        }
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return (
+            self.coordinator.last_update_success
+            and self._device_sn in self.coordinator.data.get("devices", {})
+        )
+
+
+class DeyeCloudSolarSellSwitch(CoordinatorEntity, SwitchEntity):
+    """Representation of a Deye Cloud Solar Sell Switch."""
+
+    def __init__(self, coordinator, device_sn: str) -> None:
+        """Initialize the switch."""
+        super().__init__(coordinator)
+        self._device_sn = device_sn
+        self._attr_name = "Deye Solar Sell"
+        self._attr_unique_id = f"{device_sn}_solar_sell"
+        self._attr_icon = "mdi:solar-power"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if the switch is on."""
+        device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
+        
+        # Try data first, then config
+        data = device_data.get("data", {})
+        config = device_data.get("config", {})
+        
+        # Try different possible keys for solar sell
+        solar_sell = (
+            data.get("solarSell") or 
+            data.get("SolarSell") or 
+            data.get("solarSellEnable") or
+            config.get("solarSell") or
+            config.get("solarSellEnable")
+        )
+        
+        if solar_sell is not None:
+            # Handle both boolean and string values
+            if isinstance(solar_sell, str):
+                return solar_sell.lower() in ["true", "1", "on", "enabled", "enable"]
+            return bool(solar_sell)
+        
+        return None
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the switch on."""
+        try:
+            await self.coordinator.client.set_solar_sell(
+                device_sn=self._device_sn,
+                enabled=True,
+            )
+            await self.coordinator.async_request_refresh()
+        except DeyeCloudApiError as err:
+            _LOGGER.error("Failed to enable solar sell: %s", err)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn the switch off."""
+        try:
+            await self.coordinator.client.set_solar_sell(
+                device_sn=self._device_sn,
+                enabled=False,
+            )
+            await self.coordinator.async_request_refresh()
+        except DeyeCloudApiError as err:
+            _LOGGER.error("Failed to disable solar sell: %s", err)
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        """Return device information."""
+        device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
+        info = device_data.get("info", {})
+        
+        return {
+            "identifiers": {(DOMAIN, self._device_sn)},
+            "name": f"INVERTER {self._device_sn}",
+            "manufacturer": "Deye",
+            "model": info.get("deviceType", "Inverter"),
             "serial_number": self._device_sn,
         }
 
