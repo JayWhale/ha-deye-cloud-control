@@ -30,11 +30,11 @@ async def async_setup_entry(
     # Add battery current limit numbers and max sell power for each device
     for device_sn in coordinator.devices:
         entities.extend([
-            DeyeCloudBatteryChargeCurrent(
+            DeyeCloudMaxChargeCurrent(
                 coordinator=coordinator,
                 device_sn=device_sn,
             ),
-            DeyeCloudBatteryDischargeCurrent(
+            DeyeCloudMaxDischargeCurrent(
                 coordinator=coordinator,
                 device_sn=device_sn,
             ),
@@ -47,8 +47,8 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class DeyeCloudBatteryChargeCurrent(CoordinatorEntity, NumberEntity):
-    """Representation of battery charge current limit."""
+class DeyeCloudMaxChargeCurrent(CoordinatorEntity, NumberEntity):
+    """Representation of battery max charge current setting."""
 
     _attr_mode = NumberMode.BOX
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -58,28 +58,28 @@ class DeyeCloudBatteryChargeCurrent(CoordinatorEntity, NumberEntity):
         """Initialize the number."""
         super().__init__(coordinator)
         self._device_sn = device_sn
-        self._attr_name = "Deye Battery Charge Current"
-        self._attr_unique_id = f"{device_sn}_battery_charge_current"
+        self._attr_name = "Deye Max Charge Current"
+        self._attr_unique_id = f"{device_sn}_max_charge_current"
         self._attr_native_min_value = 0
-        self._attr_native_max_value = 150
+        self._attr_native_max_value = 200
         self._attr_native_step = 1
 
     @property
     def native_value(self) -> float | None:
         """Return the current value."""
         device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
-        data = device_data.get("data", {})
         config = device_data.get("config", {})
         
-        charge_current = (
-            data.get("chargeCurrentLimit") or 
-            data.get("ChargeCurrentLimit") or
+        # Try different possible keys
+        max_charge = (
+            config.get("maxChargeCurrent") or
+            config.get("MaxChargeCurrent") or
             config.get("chargeCurrentLimit")
         )
         
-        if charge_current is not None:
+        if max_charge is not None:
             try:
-                return float(charge_current)
+                return float(max_charge)
             except (ValueError, TypeError):
                 return None
         return None
@@ -93,7 +93,7 @@ class DeyeCloudBatteryChargeCurrent(CoordinatorEntity, NumberEntity):
             )
             await self.coordinator.async_request_refresh()
         except DeyeCloudApiError as err:
-            _LOGGER.error("Failed to set battery charge current: %s", err)
+            _LOGGER.error("Failed to set max charge current: %s", err)
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -118,8 +118,8 @@ class DeyeCloudBatteryChargeCurrent(CoordinatorEntity, NumberEntity):
         )
 
 
-class DeyeCloudBatteryDischargeCurrent(CoordinatorEntity, NumberEntity):
-    """Representation of battery discharge current limit."""
+class DeyeCloudMaxDischargeCurrent(CoordinatorEntity, NumberEntity):
+    """Representation of battery max discharge current setting."""
 
     _attr_mode = NumberMode.BOX
     _attr_native_unit_of_measurement = UnitOfElectricCurrent.AMPERE
@@ -129,28 +129,28 @@ class DeyeCloudBatteryDischargeCurrent(CoordinatorEntity, NumberEntity):
         """Initialize the number."""
         super().__init__(coordinator)
         self._device_sn = device_sn
-        self._attr_name = "Deye Battery Discharge Current"
-        self._attr_unique_id = f"{device_sn}_battery_discharge_current"
+        self._attr_name = "Deye Max Discharge Current"
+        self._attr_unique_id = f"{device_sn}_max_discharge_current"
         self._attr_native_min_value = 0
-        self._attr_native_max_value = 150
+        self._attr_native_max_value = 200
         self._attr_native_step = 1
 
     @property
     def native_value(self) -> float | None:
         """Return the current value."""
         device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
-        data = device_data.get("data", {})
         config = device_data.get("config", {})
         
-        discharge_current = (
-            data.get("dischargeCurrentLimit") or 
-            data.get("DischargeCurrentLimit") or
+        # Try different possible keys
+        max_discharge = (
+            config.get("maxDischargeCurrent") or
+            config.get("MaxDischargeCurrent") or
             config.get("dischargeCurrentLimit")
         )
         
-        if discharge_current is not None:
+        if max_discharge is not None:
             try:
-                return float(discharge_current)
+                return float(max_discharge)
             except (ValueError, TypeError):
                 return None
         return None
@@ -164,7 +164,7 @@ class DeyeCloudBatteryDischargeCurrent(CoordinatorEntity, NumberEntity):
             )
             await self.coordinator.async_request_refresh()
         except DeyeCloudApiError as err:
-            _LOGGER.error("Failed to set battery discharge current: %s", err)
+            _LOGGER.error("Failed to set max discharge current: %s", err)
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -203,7 +203,7 @@ class DeyeCloudMaxSellPower(CoordinatorEntity, NumberEntity):
         self._attr_name = "Deye Max Sell Power"
         self._attr_unique_id = f"{device_sn}_max_sell_power"
         self._attr_native_min_value = 0
-        self._attr_native_max_value = 20000  # Adjust based on your system
+        self._attr_native_max_value = 20000
         self._attr_native_step = 100
 
     @property
