@@ -27,7 +27,7 @@ async def async_setup_entry(
 
     entities = []
 
-    # Add battery current limit numbers for each device
+    # Add battery current limit numbers and max sell power for each device
     for device_sn in coordinator.devices:
         entities.extend([
             DeyeCloudBatteryChargeCurrent(
@@ -35,6 +35,10 @@ async def async_setup_entry(
                 device_sn=device_sn,
             ),
             DeyeCloudBatteryDischargeCurrent(
+                coordinator=coordinator,
+                device_sn=device_sn,
+            ),
+            DeyeCloudMaxSellPower(
                 coordinator=coordinator,
                 device_sn=device_sn,
             ),
@@ -86,6 +90,79 @@ class DeyeCloudBatteryChargeCurrent(CoordinatorEntity, NumberEntity):
             await self.coordinator.async_request_refresh()
         except DeyeCloudApiError as err:
             _LOGGER.error("Failed to set max charge current: %s", err)
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        """Return device information."""
+        device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
+        info = device_data.get("info", {})
+        
+        return {
+            "identifiers": {(DOMAIN, self._device_sn)},
+            "name": f"INVERTER {self._device_sn}",
+            "manufacturer": "Deye",
+            "model": info.get("deviceType", "Inverter"),
+            "serial_number": self._device_sn,
+        }
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return (
+            self.coordinator.last_update_success
+            and self._device_sn in self.coordinator.data.get("devices", {})
+        )
+
+
+class DeyeCloudMaxSellPower(CoordinatorEntity, NumberEntity):
+    """Representation of max sell power setting."""
+
+    _attr_mode = NumberMode.BOX
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_icon = "mdi:transmission-tower-export"
+
+    def __init__(self, coordinator, device_sn: str) -> None:
+        """Initialize the number."""
+        super().__init__(coordinator)
+        self._device_sn = device_sn
+        self._attr_name = "Deye Max Sell Power"
+        self._attr_unique_id = f"{device_sn}_max_sell_power"
+        self._attr_native_min_value = 0
+        self._attr_native_max_value = 20000  # Adjust based on your system
+        self._attr_native_step = 100
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the current value."""
+        device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
+        
+        # Try data first, then config
+        data = device_data.get("data", {})
+        config = device_data.get("config", {})
+        
+        max_sell = (
+            data.get("maxSellPower") or 
+            data.get("MaxSellPower") or
+            config.get("maxSellPower")
+        )
+        
+        if max_sell is not None:
+            try:
+                return float(max_sell)
+            except (ValueError, TypeError):
+                return None
+        return None
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set new value."""
+        try:
+            await self.coordinator.client.set_max_sell_power(
+                device_sn=self._device_sn,
+                power=int(value),
+            )
+            await self.coordinator.async_request_refresh()
+        except DeyeCloudApiError as err:
+            _LOGGER.error("Failed to set max sell power: %s", err)
 
     @property
     def device_info(self) -> dict[str, Any]:
