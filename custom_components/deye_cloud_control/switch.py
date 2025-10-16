@@ -45,8 +45,6 @@ async def async_setup_entry(
 class DeyeCloudBatteryChargeModeSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of a Deye Cloud Battery Charge Mode Switch."""
 
-    _attr_device_class = None  # Simple switch, no special device class
-
     def __init__(self, coordinator, device_sn: str) -> None:
         """Initialize the switch."""
         super().__init__(coordinator)
@@ -54,83 +52,47 @@ class DeyeCloudBatteryChargeModeSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_name = "Deye Battery Charging Mode"
         self._attr_unique_id = f"{device_sn}_battery_charge_mode"
         self._attr_icon = "mdi:battery-charging"
-        self._state = None  # Track state locally
+        # Default to OFF, will be updated when we get real state
+        self._attr_is_on = False
+        self._attr_assumed_state = True  # Tell HA we don't have definitive state
 
     @property
-    def is_on(self) -> bool | None:
+    def is_on(self) -> bool:
         """Return true if the switch is on."""
-        device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
-        data = device_data.get("data", {})
-        config = device_data.get("config", {})
-        
-        # Log ALL keys we're getting from the API for debugging
-        _LOGGER.warning(
-            "Battery Charge Mode DEBUG - ALL data keys: %s",
-            list(data.keys())
-        )
-        _LOGGER.warning(
-            "Battery Charge Mode DEBUG - ALL config keys: %s",
-            list(config.keys())
-        )
-        
-        # Try different possible keys for charge mode
-        charge_mode = (
-            data.get("chargeMode") or 
-            data.get("ChargeMode") or 
-            data.get("BatteryChargeMode") or
-            data.get("batteryChargeMode") or
-            config.get("chargeMode") or
-            config.get("batteryChargeMode") or
-            config.get("ChargeMode")
-        )
-        
-        _LOGGER.debug("Battery Charge Mode raw value: %s (type: %s)", charge_mode, type(charge_mode))
-        
-        if charge_mode is not None:
-            # Handle both boolean and string values
-            if isinstance(charge_mode, str):
-                result = charge_mode.lower() in ["true", "1", "on", "enabled", "enable"]
-                _LOGGER.debug("Battery Charge Mode parsed as: %s", result)
-                self._state = result
-                return result
-            result = bool(charge_mode)
-            _LOGGER.debug("Battery Charge Mode boolean: %s", result)
-            self._state = result
-            return result
-        
-        # If we can't get state from API, return last known state
-        _LOGGER.warning("Battery Charge Mode - No state found in API response, using cached state: %s", self._state)
-        return self._state
+        # Return the assumed state
+        return self._attr_is_on
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
         try:
-            _LOGGER.info("Turning ON battery charge mode for device %s", self._device_sn)
+            _LOGGER.info("Enabling battery charge mode for device %s", self._device_sn)
             await self.coordinator.client.set_battery_mode(
                 device_sn=self._device_sn,
                 charge_mode=True,
             )
-            self._state = True  # Update local state immediately
-            self.async_write_ha_state()  # Update UI immediately
+            self._attr_is_on = True
+            self.async_write_ha_state()
+            # Refresh to get updated state from API
             await self.coordinator.async_request_refresh()
         except DeyeCloudApiError as err:
             _LOGGER.error("Failed to enable battery charge mode: %s", err)
-            self._state = False  # Revert on error
+            # Don't change state on error
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
         try:
-            _LOGGER.info("Turning OFF battery charge mode for device %s", self._device_sn)
+            _LOGGER.info("Disabling battery charge mode for device %s", self._device_sn)
             await self.coordinator.client.set_battery_mode(
                 device_sn=self._device_sn,
                 charge_mode=False,
             )
-            self._state = False  # Update local state immediately
-            self.async_write_ha_state()  # Update UI immediately
+            self._attr_is_on = False
+            self.async_write_ha_state()
+            # Refresh to get updated state from API
             await self.coordinator.async_request_refresh()
         except DeyeCloudApiError as err:
             _LOGGER.error("Failed to disable battery charge mode: %s", err)
-            self._state = True  # Revert on error
+            # Don't change state on error
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -158,8 +120,6 @@ class DeyeCloudBatteryChargeModeSwitch(CoordinatorEntity, SwitchEntity):
 class DeyeCloudSolarSellSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of a Deye Cloud Solar Sell Switch."""
 
-    _attr_device_class = None  # Simple switch, no special device class
-
     def __init__(self, coordinator, device_sn: str) -> None:
         """Initialize the switch."""
         super().__init__(coordinator)
@@ -167,83 +127,47 @@ class DeyeCloudSolarSellSwitch(CoordinatorEntity, SwitchEntity):
         self._attr_name = "Deye Solar Sell"
         self._attr_unique_id = f"{device_sn}_solar_sell"
         self._attr_icon = "mdi:solar-power"
-        self._state = None  # Track state locally
+        # Default to ON (selling enabled), will be updated when we get real state
+        self._attr_is_on = True
+        self._attr_assumed_state = True  # Tell HA we don't have definitive state
 
     @property
-    def is_on(self) -> bool | None:
+    def is_on(self) -> bool:
         """Return true if the switch is on."""
-        device_data = self.coordinator.data.get("devices", {}).get(self._device_sn, {})
-        data = device_data.get("data", {})
-        config = device_data.get("config", {})
-        
-        # Log ALL keys we're getting from the API for debugging
-        _LOGGER.warning(
-            "Solar Sell DEBUG - ALL data keys: %s",
-            list(data.keys())
-        )
-        _LOGGER.warning(
-            "Solar Sell DEBUG - ALL config keys: %s",
-            list(config.keys())
-        )
-        
-        # Try different possible keys for solar sell
-        solar_sell = (
-            data.get("solarSell") or 
-            data.get("SolarSell") or 
-            data.get("solarSellEnable") or
-            data.get("SolarSellEnable") or
-            config.get("solarSell") or
-            config.get("solarSellEnable") or
-            config.get("SolarSellEnable")
-        )
-        
-        _LOGGER.debug("Solar Sell raw value: %s (type: %s)", solar_sell, type(solar_sell))
-        
-        if solar_sell is not None:
-            # Handle both boolean and string values
-            if isinstance(solar_sell, str):
-                result = solar_sell.lower() in ["true", "1", "on", "enabled", "enable"]
-                _LOGGER.debug("Solar Sell parsed as: %s", result)
-                self._state = result
-                return result
-            result = bool(solar_sell)
-            _LOGGER.debug("Solar Sell boolean: %s", result)
-            self._state = result
-            return result
-        
-        # If we can't get state from API, return last known state
-        _LOGGER.warning("Solar Sell - No state found in API response, using cached state: %s", self._state)
-        return self._state
+        # Return the assumed state
+        return self._attr_is_on
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
         try:
-            _LOGGER.info("Turning ON solar sell for device %s", self._device_sn)
+            _LOGGER.info("Enabling solar sell for device %s", self._device_sn)
             await self.coordinator.client.set_solar_sell(
                 device_sn=self._device_sn,
                 enabled=True,
             )
-            self._state = True  # Update local state immediately
-            self.async_write_ha_state()  # Update UI immediately
+            self._attr_is_on = True
+            self.async_write_ha_state()
+            # Refresh to get updated state from API
             await self.coordinator.async_request_refresh()
         except DeyeCloudApiError as err:
             _LOGGER.error("Failed to enable solar sell: %s", err)
-            self._state = False  # Revert on error
+            # Don't change state on error
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
         try:
-            _LOGGER.info("Turning OFF solar sell for device %s", self._device_sn)
+            _LOGGER.info("Disabling solar sell for device %s", self._device_sn)
             await self.coordinator.client.set_solar_sell(
                 device_sn=self._device_sn,
                 enabled=False,
             )
-            self._state = False  # Update local state immediately
-            self.async_write_ha_state()  # Update UI immediately
+            self._attr_is_on = False
+            self.async_write_ha_state()
+            # Refresh to get updated state from API
             await self.coordinator.async_request_refresh()
         except DeyeCloudApiError as err:
             _LOGGER.error("Failed to disable solar sell: %s", err)
-            self._state = True  # Revert on error
+            # Don't change state on error
 
     @property
     def device_info(self) -> dict[str, Any]:
