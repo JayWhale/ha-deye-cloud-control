@@ -1,10 +1,7 @@
-"""API client for Deye Cloud."""
-from __future__ import annotations
-
-import asyncio
+"""Deye Cloud API Client."""
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 import aiohttp
 import async_timeout
@@ -12,7 +9,7 @@ import async_timeout
 _LOGGER = logging.getLogger(__name__)
 
 API_TIMEOUT = 30
-TOKEN_EXPIRY_BUFFER = 300  # Refresh token 5 minutes before expiry
+TOKEN_EXPIRY_BUFFER = 300  # 5 minutes
 
 
 class DeyeCloudApiError(Exception):
@@ -25,8 +22,8 @@ class DeyeCloudAuthError(DeyeCloudApiError):
     pass
 
 
-class DeyeCloudClient:
-    """Deye Cloud API client."""
+class DeyeCloudApiClient:
+    """Deye Cloud API Client."""
 
     def __init__(
         self,
@@ -34,34 +31,39 @@ class DeyeCloudClient:
         app_secret: str,
         email: str,
         password: str,
-        base_url: str = "https://eu1-developer.deyecloud.com/v1.0",
+        base_url: str,
+        session: aiohttp.ClientSession = None,
     ) -> None:
-        """Initialize the client."""
+        """Initialize the API client."""
         self.app_id = app_id
         self.app_secret = app_secret
         self.email = email
         self.password = password
         self.base_url = base_url
-        self._session: Optional[aiohttp.ClientSession] = None
-        self._access_token: Optional[str] = None
-        self._token_expiry: float = 0
+        self._session = session
+        self._access_token = None
+        self._token_expiry = 0
 
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Get aiohttp session."""
-        if self._session is None or self._session.closed:
+        """Get or create aiohttp session."""
+        if self._session is None:
             self._session = aiohttp.ClientSession()
         return self._session
 
     async def close(self) -> None:
-        """Close the session."""
-        if self._session and not self._session.closed:
+        """Close the aiohttp session."""
+        if self._session:
             await self._session.close()
+            self._session = None
 
     async def obtain_token(self) -> None:
-        """Obtain access token."""
+        """Obtain access token - THIS IS THE WORKING VERSION FROM OCT 11."""
         session = await self._get_session()
-        url = f"{self.base_url}/token"
+        
+        # Use /v1.0/token endpoint with ALL params in body
+        url = f"{self.base_url}/v1.0/token"
 
+        # ALL parameters go in the request body
         data = {
             "appId": self.app_id,
             "appSecret": self.app_secret,
@@ -83,6 +85,7 @@ class DeyeCloudClient:
                 _LOGGER.error("Token error: %s (code: %s)", error_msg, code)
                 raise DeyeCloudAuthError(error_msg)
 
+            # Token comes from the root of the response, not from data
             self._access_token = result.get("accessToken")
             if not self._access_token:
                 _LOGGER.error("No access token in response: %s", result)
@@ -104,24 +107,27 @@ class DeyeCloudClient:
         self,
         method: str,
         endpoint: str,
-        data: Optional[Dict[str, Any]] = None,
+        data: dict[str, Any] = None,
         require_auth: bool = True,
-    ) -> Dict[str, Any]:
-        """Make API request."""
+    ) -> dict[str, Any]:
+        """Make API request with Bearer token in header."""
         session = await self._get_session()
         url = f"{self.base_url}{endpoint}"
 
         if data is None:
             data = {}
 
-        headers = {
-            "Content-Type": "application/json",
-        }
-
-        # Add access token if required and available
+        # Get fresh token if needed
         if require_auth:
             if not self._access_token or time.time() >= self._token_expiry:
                 await self.obtain_token()
+
+        headers = {
+            "Content-Type": "application/json",
+        }
+        
+        # Add Bearer token to Authorization header
+        if require_auth and self._access_token:
             headers["Authorization"] = f"Bearer {self._access_token}"
 
         try:
@@ -144,188 +150,63 @@ class DeyeCloudClient:
             if code not in [0, 1000000, "0", "1000000"]:
                 error_msg = result.get("msg", "Unknown error")
                 _LOGGER.error("API error: %s (code: %s)", error_msg, code)
-                if code in [1001, 1002, 1003, "1001", "1002", "1003", 2101017, "2101017"]:
+                if code in [1001, 1002, 1003, 2101017, "1001", "1002", "1003", "2101017"]:
                     raise DeyeCloudAuthError(error_msg)
                 raise DeyeCloudApiError(error_msg)
 
             return result.get("data", {})
 
         except aiohttp.ClientError as err:
-            _LOGGER.error("Connection error: %s", err)
-            raise DeyeCloudApiError(f"Connection error: {err}") from err
+            _LOGGER.error("API request error: %s", err)
+            raise DeyeCloudApiError(f"Request failed: {err}") from err
         except asyncio.TimeoutError as err:
-            _LOGGER.error("Request timeout for %s", endpoint)
+            _LOGGER.error("API request timeout")
             raise DeyeCloudApiError("Request timeout") from err
 
-    async def get_station_list(self) -> Dict[str, Any]:
+    async def get_station_list(self) -> list[dict[str, Any]]:
         """Get list of stations."""
-        result = await self._request("POST", "/station/list", data={})
-        return result
+        result = await self._request("POST", "/v1.0/station/list")
+        return result.get("stationList", [])
 
-    async def get_device_list(self) -> Dict[str, Any]:
-        """Get list of devices."""
-        result = await self._request("POST", "/device/list", data={})
-        return result
+    async def get_device_list(self, station_id: str) -> list[dict[str, Any]]:
+        """Get list of devices for a station."""
+        data = {"stationId": station_id}
+        result = await self._request("POST", "/v1.0/device/list", data)
+        return result.get("deviceList", [])
 
-    async def get_device_latest_data(
-        self, device_sns: list[str]
-    ) -> Dict[str, Any]:
-        """Get latest data for devices."""
-        if len(device_sns) > 10:
-            raise ValueError("Maximum 10 devices per request")
-
-        data = {"deviceList": device_sns}
-        result = await self._request("POST", "/device/latest", data=data)
-        return result
-
-    async def get_system_config(self, device_sn: str) -> Dict[str, Any]:
-        """Get system configuration."""
+    async def get_device_info(self, device_sn: str) -> dict[str, Any]:
+        """Get device information."""
         data = {"deviceSn": device_sn}
-        result = await self._request("POST", "/config/system", data=data)
-        return result
+        return await self._request("POST", "/v1.0/device/info", data)
 
-    async def get_battery_config(self, device_sn: str) -> Dict[str, Any]:
-        """Get battery configuration."""
-        data = {"deviceSn": device_sn}
-        result = await self._request("POST", "/config/battery", data=data)
-        return result
+    async def get_realtime_data(self, device_sn: str) -> dict[str, Any]:
+        """Get real-time device data."""
+        data = {"sn": device_sn}
+        return await self._request("POST", "/v1.0/device/getDataInfo", data)
 
-    async def get_tou_config(self, device_sn: str) -> Dict[str, Any]:
-        """Get Time of Use configuration."""
-        data = {"deviceSn": device_sn}
-        result = await self._request("POST", "/config/tou", data=data)
-        return result
-
-    # Control methods - FIXED based on API documentation
-
-    async def set_solar_sell(
-        self, device_sn: str, enabled: bool
-    ) -> Dict[str, Any]:
-        """Enable or disable solar sell.
-        
-        Args:
-            device_sn: Device serial number
-            enabled: True to enable, False to disable
-        """
+    async def set_work_mode(self, device_sn: str, mode: int) -> None:
+        """Set device work mode."""
         data = {
-            "action": "on" if enabled else "off",
             "deviceSn": device_sn,
+            "type": 2,
+            "value": mode,
         }
-        result = await self._request("POST", "/order/sys/solarSell/control", data=data)
-        return result
+        await self._request("POST", "/v1.0/device/setting", data)
 
-    async def set_work_mode(
-        self, device_sn: str, work_mode: str
-    ) -> Dict[str, Any]:
-        """Set system work mode.
-        
-        Args:
-            device_sn: Device serial number
-            work_mode: 'SELLING_FIRST', 'ZERO_EXPORT_TO_LOAD', or 'ZERO_EXPORT_TO_CT'
-        """
+    async def set_solar_sell(self, device_sn: str, enabled: bool) -> None:
+        """Enable or disable solar selling."""
         data = {
             "deviceSn": device_sn,
-            "workMode": work_mode,
+            "type": 14,
+            "value": 1 if enabled else 0,
         }
-        result = await self._request("POST", "/order/sys/workMode/update", data=data)
-        return result
+        await self._request("POST", "/v1.0/device/setting", data)
 
-    async def set_energy_pattern(
-        self, device_sn: str, energy_pattern: str
-    ) -> Dict[str, Any]:
-        """Set energy pattern.
-        
-        Args:
-            device_sn: Device serial number
-            energy_pattern: 'BATTERY_FIRST' or 'LOAD_FIRST'
-        """
+    async def set_max_sell_power(self, device_sn: str, power: int) -> None:
+        """Set maximum sell power in watts."""
         data = {
             "deviceSn": device_sn,
-            "energyPattern": energy_pattern,
-        }
-        result = await self._request("POST", "/order/sys/energyPattern/update", data=data)
-        return result
-
-    async def set_max_sell_power(
-        self, device_sn: str, power: int
-    ) -> Dict[str, Any]:
-        """Set max sell power.
-        
-        Args:
-            device_sn: Device serial number
-            power: Max sell power in watts
-        """
-        data = {
-            "deviceSn": device_sn,
-            "powerType": "MAX_SELL_POWER",
+            "type": 15,
             "value": power,
         }
-        result = await self._request("POST", "/order/sys/power/update", data=data)
-        return result
-
-    async def set_battery_charge_current(
-        self, device_sn: str, current: int
-    ) -> Dict[str, Any]:
-        """Set battery charge current limit.
-        
-        Args:
-            device_sn: Device serial number
-            current: Max charge current in amps
-        """
-        data = {
-            "deviceSn": device_sn,
-            "parameterType": "MAX_CHARGE_CURRENT",
-            "value": current,
-        }
-        result = await self._request("POST", "/order/battery/parameter/update", data=data)
-        return result
-
-    async def set_battery_discharge_current(
-        self, device_sn: str, current: int
-    ) -> Dict[str, Any]:
-        """Set battery discharge current limit.
-        
-        Args:
-            device_sn: Device serial number
-            current: Max discharge current in amps
-        """
-        data = {
-            "deviceSn": device_sn,
-            "parameterType": "MAX_DISCHARGE_CURRENT",
-            "value": current,
-        }
-        result = await self._request("POST", "/order/battery/parameter/update", data=data)
-        return result
-
-    async def set_battery_mode(
-        self, device_sn: str, charge_mode: bool
-    ) -> Dict[str, Any]:
-        """Enable or disable battery charge mode.
-        
-        NOTE: This endpoint is not shown in the screenshots provided.
-        This may not work correctly until we have the actual API documentation.
-        """
-        data = {
-            "deviceSn": device_sn,
-            "chargeMode": charge_mode,
-        }
-        result = await self._request("POST", "/order/battery/modeControl", data=data)
-        return result
-
-    async def set_tou_config(
-        self, device_sn: str, tou_items: list[dict], timeout_seconds: int = 30
-    ) -> Dict[str, Any]:
-        """Set Time of Use configuration.
-        
-        Args:
-            device_sn: Device serial number
-            tou_items: List of TOU setting items
-            timeout_seconds: Command timeout
-        """
-        data = {
-            "deviceSn": device_sn,
-            "timeUseSettingItems": tou_items,
-            "timeoutSeconds": timeout_seconds,
-        }
-        result = await self._request("POST", "/order/sys/tou/update", data=data)
-        return result
+        await self._request("POST", "/v1.0/device/setting", data)
