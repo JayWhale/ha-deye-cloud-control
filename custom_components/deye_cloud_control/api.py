@@ -279,10 +279,20 @@ class DeyeCloudClient:
         return result
 
     async def set_battery_mode(
-        self, device_sn: str, charge_mode: bool
+        self, device_sn: str, charge_mode: bool, mode_type: str = "GRID_CHARGE"
     ) -> Dict[str, Any]:
-        """Enable or disable battery charge mode."""
-        data = {"deviceSn": device_sn, "chargeMode": charge_mode}
+        """Enable or disable battery charge mode.
+        
+        Args:
+            device_sn: Device serial number
+            charge_mode: True to enable, False to disable
+            mode_type: 'GRID_CHARGE' or 'GEN_CHARGE'
+        """
+        data = {
+            "action": "on" if charge_mode else "off",
+            "batteryModeType": mode_type,
+            "deviceSn": device_sn
+        }
         result = await self._request("POST", "/order/battery/modeControl", data=data)
         return result
 
@@ -364,8 +374,8 @@ class DeyeCloudClient:
             enabled: True to enable, False to disable
         """
         data = {
+            "action": "on" if enabled else "off",
             "deviceSn": device_sn,
-            "solarSellEnable": enabled,
         }
         result = await self._request("POST", "/order/sys/solarSell/control", data=data)
         return result
