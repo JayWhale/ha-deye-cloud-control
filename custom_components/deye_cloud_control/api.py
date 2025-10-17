@@ -60,10 +60,12 @@ class DeyeCloudClient:
     async def obtain_token(self) -> None:
         """Obtain access token."""
         session = await self._get_session()
-        url = f"{self.base_url}/token"
+        
+        # appId goes in the URL as query parameter
+        url = f"{self.base_url}/account/token?appId={self.app_id}"
 
+        # Everything else goes in the body
         data = {
-            "appId": self.app_id,
             "appSecret": self.app_secret,
             "email": self.email,
             "password": self.password,
