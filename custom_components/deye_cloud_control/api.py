@@ -60,12 +60,10 @@ class DeyeCloudClient:
     async def obtain_token(self) -> None:
         """Obtain access token."""
         session = await self._get_session()
-        
-        # appId goes in the URL as query parameter
-        url = f"{self.base_url}/account/token?appId={self.app_id}"
+        url = f"{self.base_url}/token"
 
-        # Everything else goes in the body
         data = {
+            "appId": self.app_id,
             "appSecret": self.app_secret,
             "email": self.email,
             "password": self.password,
@@ -73,32 +71,24 @@ class DeyeCloudClient:
 
         headers = {"Content-Type": "application/json"}
 
-        _LOGGER.info("Requesting token from URL: %s", url)
-        _LOGGER.info("Request data keys: %s", list(data.keys()))
-        _LOGGER.debug("Email: %s", self.email)
-
         try:
             async with async_timeout.timeout(API_TIMEOUT):
                 async with session.post(url, json=data, headers=headers) as response:
-                    _LOGGER.info("Token response status: %s", response.status)
                     response.raise_for_status()
                     result = await response.json()
-                    _LOGGER.info("Token response code: %s, msg: %s", result.get("code"), result.get("msg"))
 
             code = result.get("code")
             if code not in [0, 1000000, "0", "1000000"]:
                 error_msg = result.get("msg", "Unknown error")
                 _LOGGER.error("Token error: %s (code: %s)", error_msg, code)
-                _LOGGER.error("Full response: %s", result)
                 raise DeyeCloudAuthError(error_msg)
 
-            token_data = result.get("data", {})
-            self._access_token = token_data.get("accessToken")
+            self._access_token = result.get("accessToken")
             if not self._access_token:
                 _LOGGER.error("No access token in response: %s", result)
                 raise DeyeCloudAuthError("No access token in response")
             
-            expires_in = token_data.get("expiresIn", 3600)
+            expires_in = result.get("expiresIn", 3600)
             self._token_expiry = time.time() + expires_in - TOKEN_EXPIRY_BUFFER
 
             _LOGGER.info("Successfully obtained access token, expires in %s seconds", expires_in)
