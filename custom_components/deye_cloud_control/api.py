@@ -73,16 +73,23 @@ class DeyeCloudClient:
 
         headers = {"Content-Type": "application/json"}
 
+        _LOGGER.info("Requesting token from URL: %s", url)
+        _LOGGER.info("Request data keys: %s", list(data.keys()))
+        _LOGGER.debug("Email: %s", self.email)
+
         try:
             async with async_timeout.timeout(API_TIMEOUT):
                 async with session.post(url, json=data, headers=headers) as response:
+                    _LOGGER.info("Token response status: %s", response.status)
                     response.raise_for_status()
                     result = await response.json()
+                    _LOGGER.info("Token response code: %s, msg: %s", result.get("code"), result.get("msg"))
 
             code = result.get("code")
             if code not in [0, 1000000, "0", "1000000"]:
                 error_msg = result.get("msg", "Unknown error")
                 _LOGGER.error("Token error: %s (code: %s)", error_msg, code)
+                _LOGGER.error("Full response: %s", result)
                 raise DeyeCloudAuthError(error_msg)
 
             token_data = result.get("data", {})
