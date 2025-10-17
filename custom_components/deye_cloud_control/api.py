@@ -92,10 +92,10 @@ class DeyeCloudClient:
                         
             _LOGGER.debug("Full API response for %s: %s", endpoint, result)
 
-            # Check API response code (0 and 1000000 are success codes)
+            # Check API response code (0, 1000000, and 1106000 are success codes)
             # Handle both string and integer codes
             code = result.get("code")
-            if code not in [0, 1000000, "0", "1000000"]:
+            if code not in [0, 1000000, 1106000, "0", "1000000", "1106000"]:
                 error_msg = result.get("msg", "Unknown error")
                 _LOGGER.error("API error: %s (code: %s)", error_msg, code)
                 if code in [1001, 1002, 1003, "1001", "1002", "1003", 2101017, "2101017"]:  # Auth errors
