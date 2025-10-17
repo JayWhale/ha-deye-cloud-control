@@ -269,10 +269,9 @@ class DeyeCloudClient:
         """
         data = {
             "deviceSn": device_sn,
-            "parameterType": "MAX_CHARGE_CURRENT",
-            "value": current,
+            "limitControlFunctionType": "SELL_FIRST",  # This might need adjustment
         }
-        result = await self._request("POST", "/order/battery/parameter/update", data=data)
+        result = await self._request("POST", "/order/sys/limitControl", data=data)
         return result
 
     async def set_battery_discharge_current(
@@ -286,10 +285,9 @@ class DeyeCloudClient:
         """
         data = {
             "deviceSn": device_sn,
-            "parameterType": "MAX_DISCHARGE_CURRENT",
-            "value": current,
+            "limitControlFunctionType": "SELL_FIRST",  # This might need adjustment
         }
-        result = await self._request("POST", "/order/battery/parameter/update", data=data)
+        result = await self._request("POST", "/order/sys/limitControl", data=data)
         return result
 
     async def set_battery_mode(
