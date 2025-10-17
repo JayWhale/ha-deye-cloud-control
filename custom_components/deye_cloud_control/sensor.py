@@ -54,7 +54,13 @@ DEVICE_CLASS_MAP = {
 
 # Map sensor keys to state classes
 STATE_CLASS_MAP = {
-    "Total": SensorStateClass.TOTAL,
+    "TotalEnergy": SensorStateClass.TOTAL,
+    "TotalProduction": SensorStateClass.TOTAL,
+    "TotalConsumption": SensorStateClass.TOTAL,
+    "TotalCharge": SensorStateClass.TOTAL,
+    "TotalDischarge": SensorStateClass.TOTAL,
+    "TotalBuy": SensorStateClass.TOTAL,
+    "TotalSell": SensorStateClass.TOTAL,
     "Daily": SensorStateClass.TOTAL_INCREASING,
 }
 
@@ -69,12 +75,17 @@ def get_device_class(key: str) -> SensorDeviceClass | None:
 
 def get_state_class(key: str) -> SensorStateClass | None:
     """Determine state class from sensor key."""
+    # Check specific patterns first
     for pattern, state_class in STATE_CLASS_MAP.items():
         if pattern in key:
             return state_class
-    # Default to measurement for power/voltage/current sensors
-    if any(x in key for x in ["Power", "Voltage", "Current", "Frequency", "SOC"]):
+    
+    # Default to measurement for power/voltage/current sensors (but NOT total power)
+    if "Power" in key and "Total" not in key:
         return SensorStateClass.MEASUREMENT
+    if any(x in key for x in ["Voltage", "Current", "Frequency", "SOC", "Temperature"]):
+        return SensorStateClass.MEASUREMENT
+    
     return None
 
 
@@ -149,7 +160,23 @@ class DeyeCloudStationSensor(CoordinatorEntity, SensorEntity):
         # Auto-detect device class and state class
         self._attr_device_class = get_device_class(sensor_key)
         self._attr_state_class = get_state_class(sensor_key)
+        self._attr_native_unit_of_measurement = self._get_unit_of_measurement()
         self._attr_icon = self._get_icon()
+
+    def _get_unit_of_measurement(self) -> str | None:
+        """Return the unit based on the sensor key."""
+        key_lower = self._sensor_key.lower()
+        
+        if "power" in key_lower:
+            return UnitOfPower.WATT
+        elif "energy" in key_lower:
+            return UnitOfEnergy.KILO_WATT_HOUR
+        elif "soc" in key_lower:
+            return PERCENTAGE
+        elif "irradiate" in key_lower:
+            return "W/m²"
+            
+        return None
 
     def _get_station_name(self) -> str:
         """Get station name."""
